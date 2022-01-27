@@ -1,0 +1,13 @@
+
+[programs.localnet]
+lambda_escrow = "H6F8pqX9oVwWz8bsPdastMv2eMEr6VBzhaBBanajBp5s"
+
+[registry]
+url = "https://anchor.projectserum.com"
+
+[provider]
+cluster = "localnet"
+wallet = "/home/nghiatc/.config/solana/id.json"
+
+[scripts]
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"

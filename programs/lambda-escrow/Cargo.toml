@@ -1,0 +1,21 @@
+[package]
+name = "lambda-escrow"
+version = "0.1.0"
+description = "Created with autonomous.ai"
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "lambda_escrow"
+
+[features]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+default = []
+
+[dependencies]
+anchor-lang = "0.19.0"
+anchor-spl = {version = "0.19.0"}
+spl-token = {version = "3.2.0", features = ["no-entrypoint"]}
