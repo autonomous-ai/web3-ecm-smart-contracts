@@ -1,7 +1,7 @@
 [package]
 name = "lambda-escrow"
-version = "0.1.0"
-description = "Created with autonomous.ai"
+version = "1.0.0"
+description = "Created with Autonomous"
 edition = "2018"
 
 [lib]

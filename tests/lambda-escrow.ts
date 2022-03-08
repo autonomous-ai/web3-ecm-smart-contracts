@@ -22,7 +22,9 @@ describe('lambda-escrow', () => {
   let vault_authority_pda = null;
 
   const amount = 1000;
+  const amountPartial = 500;
   const orderCode = 99;
+  const trialDay = 0;
 
   // Account
   const payer = anchor.web3.Keypair.generate();
@@ -33,6 +35,7 @@ describe('lambda-escrow', () => {
   const mintAuthority = anchor.web3.Keypair.generate();
   
 
+  // 1000 --> buyer
   it('Initialize program state', async () => {
     // Airdrop Sol to payer.
     await provider.connection.confirmTransaction(
@@ -86,7 +89,7 @@ describe('lambda-escrow', () => {
     // check
     let _buyerTokenAccountA = await mintA.getAccountInfo(buyerTokenAccountA);
     assert.ok(_buyerTokenAccountA.amount.toNumber() == amount);
-  });
+  }); // buyer: 1000, seller: 0
 
 
   it("Initialize escrow", async () => {
@@ -109,6 +112,7 @@ describe('lambda-escrow', () => {
       vault_account_bump,
       new anchor.BN(amount),
       new anchor.BN(orderCode),
+      new anchor.BN(trialDay),
       {
         accounts: {
           buyer: buyer.publicKey,
@@ -145,8 +149,11 @@ describe('lambda-escrow', () => {
     assert.ok(_escrowAccount.amount.toNumber() == amount);
     assert.ok(_escrowAccount.orderCode.toNumber() == orderCode);
     assert.ok(_escrowAccount.status.toString() == "0");
+    assert.ok(_escrowAccount.deliveryTime.toNumber() > 0);
+    assert.ok(_escrowAccount.trialDay == trialDay);
+    // console.log("_escrowAccount.deliveryTime:", _escrowAccount.deliveryTime.toNumber());
+    // console.log("_escrowAccount.deliveryTime:", _escrowAccount.deliveryTime.toString(10));
   });
-
 
   it("Shipping escrow state", async () => {
     // call shipping.
@@ -178,7 +185,6 @@ describe('lambda-escrow', () => {
     assert.ok(_escrowAccount.status.toString() == "1");
   });
 
-
   it("Delivered escrow state", async () => {
     // call delivered.
     await program.rpc.delivered(
@@ -209,7 +215,6 @@ describe('lambda-escrow', () => {
     assert.ok(_escrowAccount.status.toString() == "2");
   });
 
-
   it("Exchange escrow state", async () => {
     // call exchange.
     await program.rpc.exchange({
@@ -233,9 +238,9 @@ describe('lambda-escrow', () => {
     // Check
     assert.ok(_buyerTokenAccountA.amount.toNumber() == 0);
     assert.ok(_sellerTokenAccountA.amount.toNumber() == amount);
-  });
+  }); // buyer: 0, seller: 1000
 
-
+  // 1000 --> buyer
   it("Initialize escrow and cancel escrow", async () => {
     // Put back tokens into buyer token A account.
     await mintA.mintTo(
@@ -250,6 +255,7 @@ describe('lambda-escrow', () => {
       vault_account_bump,
       new anchor.BN(amount),
       new anchor.BN(orderCode),
+      new anchor.BN(trialDay),
       {
         accounts: {
           buyer: buyer.publicKey,
@@ -294,16 +300,16 @@ describe('lambda-escrow', () => {
 
     // Check all the funds token A are still there.
     assert.ok(_buyerTokenAccountA.amount.toNumber() == amount);
-  });
+  }); // buyer: 1000, seller: 1000
 
-
-  it("Initialize escrow and refund escrow", async () => {
+  it("Initialize escrow, shipping, refund and cancel escrow", async () => {
 
     // Init account escrow
     await program.rpc.initialize(
       vault_account_bump,
       new anchor.BN(amount),
       new anchor.BN(orderCode),
+      new anchor.BN(trialDay),
       {
         accounts: {
           buyer: buyer.publicKey,
@@ -392,16 +398,16 @@ describe('lambda-escrow', () => {
 
     // Check all the funds token A are still there.
     assert.ok(_buyerTokenAccountA.amount.toNumber() == amount);
-  });
+  }); // buyer: 1000, seller: 1000
 
-
-  it("Initialize escrow and adjudge escrow for Buyer", async () => {
+  it("Initialize escrow, shipping, adjudge status for Buyer and cancel escrow", async () => {
 
     // Init account escrow
     await program.rpc.initialize(
       vault_account_bump,
       new anchor.BN(amount),
       new anchor.BN(orderCode),
+      new anchor.BN(trialDay),
       {
         accounts: {
           buyer: buyer.publicKey,
@@ -493,16 +499,16 @@ describe('lambda-escrow', () => {
 
     // Check all the funds token A are still there.
     assert.ok(_buyerTokenAccountA.amount.toNumber() == amount);
-  });
+  }); // buyer: 1000, seller: 1000
 
-
-  it("Initialize escrow and adjudge escrow for Seller", async () => {
+  it("Initialize escrow, shipping, adjudge status for Seller and exchange escrow", async () => {
 
     // Init account escrow
     await program.rpc.initialize(
       vault_account_bump,
       new anchor.BN(amount),
       new anchor.BN(orderCode),
+      new anchor.BN(trialDay),
       {
         accounts: {
           buyer: buyer.publicKey,
@@ -595,9 +601,10 @@ describe('lambda-escrow', () => {
     // Check
     assert.ok(_buyerTokenAccountA.amount.toNumber() == 0);
     assert.ok(_sellerTokenAccountA.amount.toNumber() == (amount*2));
-  });
+  }); // buyer: 0, seller: 2000
 
 
+  // 2000 --> buyer
   it("Initialize escrow twice and cancel escrow twice", async () => {
     // Put back tokens into buyer token A account.
     await mintA.mintTo(
@@ -654,6 +661,7 @@ describe('lambda-escrow', () => {
       vault_account_bump2,
       new anchor.BN(amount),
       new anchor.BN(orderCode2),
+      new anchor.BN(trialDay),
       {
         accounts: {
           buyer: buyer.publicKey,
@@ -678,6 +686,7 @@ describe('lambda-escrow', () => {
       vault_account_bump3,
       new anchor.BN(amount),
       new anchor.BN(orderCode3),
+      new anchor.BN(trialDay),
       {
         accounts: {
           buyer: buyer.publicKey,
@@ -736,6 +745,1017 @@ describe('lambda-escrow', () => {
 
     // Check all the funds token A are still there.
     assert.ok(_buyerTokenAccountA.amount.toNumber() == (2*amount));
-  });
+  }); // buyer: 2000, seller: 2000
+
+  
+  it("Initialize escrow, cancel partial and cancel escrow", async () => {
+    // const escrowAccountPartial = anchor.web3.Keypair.generate();
+    // Init account escrow
+    await program.rpc.initialize(
+      vault_account_bump,
+      new anchor.BN(amount),
+      new anchor.BN(orderCode),
+      new anchor.BN(trialDay),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          seller: seller.publicKey,
+          judge: judge.publicKey,
+          mint: mintA.publicKey,
+          vaultAccount: vault_account_pda,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        instructions: [
+          await program.account.escrowAccount.createInstruction(escrowAccount),
+        ],
+        signers: [escrowAccount, buyer],
+      }
+    );
+
+    // Cancel Partial the escrow.
+    await program.rpc.cancelPartial(
+      new anchor.BN(orderCode),
+      new anchor.BN(amountPartial),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          vaultAccount: vault_account_pda,
+          vaultAuthority: vault_authority_pda,
+          escrowAccount: escrowAccount.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [buyer]
+      }
+    );
+    // Check the final owner should be the provider public key.
+    const _buyerTokenAccountAPartial = await mintA.getAccountInfo(buyerTokenAccountA);
+    // console.log(_buyerTokenAccountAPartial.amount.toNumber());
+    assert.ok(_buyerTokenAccountAPartial.owner.equals(buyer.publicKey));
+    // Check all the funds token A are still there.
+    assert.ok(_buyerTokenAccountAPartial.amount.toNumber() == (amount + amountPartial));
+    // Check Escrow Account.
+    let _escrowAccount = await program.account.escrowAccount.fetch(escrowAccount.publicKey);
+    // console.log(_escrowAccount.amount.toNumber());
+    // Check that the values in the escrow account match what we expect.
+    assert.ok(_escrowAccount.amount.toNumber() == (amount - amountPartial));
+
+
+    // Cancel the escrow.
+    await program.rpc.cancel(
+      new anchor.BN(orderCode),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          vaultAccount: vault_account_pda,
+          vaultAuthority: vault_authority_pda,
+          escrowAccount: escrowAccount.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [buyer]
+      }
+    );
+    // Check the final owner should be the provider public key.
+    const _buyerTokenAccountA = await mintA.getAccountInfo(buyerTokenAccountA);
+    // console.log(_buyerTokenAccountA.amount.toNumber());
+    assert.ok(_buyerTokenAccountA.owner.equals(buyer.publicKey));
+    // Check all the funds token A are still there.
+    assert.ok(_buyerTokenAccountA.amount.toNumber() == (amount*2));
+  }); // buyer: 2000, seller: 2000
+
+  it("Initialize escrow, shipping, refund partial, refund and cancel escrow", async () => {
+    // const escrowAccountPartial = anchor.web3.Keypair.generate();
+    // Init account escrow
+    await program.rpc.initialize(
+      vault_account_bump,
+      new anchor.BN(amount),
+      new anchor.BN(orderCode),
+      new anchor.BN(trialDay),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          seller: seller.publicKey,
+          judge: judge.publicKey,
+          mint: mintA.publicKey,
+          vaultAccount: vault_account_pda,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        instructions: [
+          await program.account.escrowAccount.createInstruction(escrowAccount),
+        ],
+        signers: [escrowAccount, buyer],
+      }
+    );
+
+    // call shipping.
+    await program.rpc.shipping(
+      new anchor.BN(orderCode),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          seller: seller.publicKey,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [seller]
+      }
+    );
+
+    // call refund partial
+    await program.rpc.refundPartial(
+      new anchor.BN(orderCode),
+      new anchor.BN(amountPartial),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          seller: seller.publicKey,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          vaultAccount: vault_account_pda,
+          vaultAuthority: vault_authority_pda,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [seller]
+      }
+    );
+    // Check the final owner should be the provider public key.
+    const _buyerTokenAccountAPartial = await mintA.getAccountInfo(buyerTokenAccountA);
+    // console.log(_buyerTokenAccountAPartial.amount.toNumber());
+    assert.ok(_buyerTokenAccountAPartial.owner.equals(buyer.publicKey));
+    // Check all the funds token A are still there.
+    assert.ok(_buyerTokenAccountAPartial.amount.toNumber() == (amount + amountPartial));
+    // Check Escrow Account.
+    let _escrowAccount = await program.account.escrowAccount.fetch(escrowAccount.publicKey);
+    // console.log(_escrowAccount.amount.toNumber());
+    // Check that the values in the escrow account match what we expect.
+    assert.ok(_escrowAccount.amount.toNumber() == (amount - amountPartial));
+
+    // call refund
+    await program.rpc.refund(
+      new anchor.BN(orderCode),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          seller: seller.publicKey,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [seller]
+      }
+    );
+
+    // Cancel the escrow.
+    await program.rpc.cancel(
+      new anchor.BN(orderCode),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          vaultAccount: vault_account_pda,
+          vaultAuthority: vault_authority_pda,
+          escrowAccount: escrowAccount.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [buyer]
+      }
+    );
+    // Check the final owner should be the provider public key.
+    const _buyerTokenAccountA = await mintA.getAccountInfo(buyerTokenAccountA);
+    // console.log(_buyerTokenAccountA.amount.toNumber());
+    assert.ok(_buyerTokenAccountA.owner.equals(buyer.publicKey));
+    // Check all the funds token A are still there.
+    assert.ok(_buyerTokenAccountA.amount.toNumber() == (amount*2));
+  }); // buyer: 2000, seller: 2000
+
+  it("Initialize escrow, cancel partial, shipping, delivered and exchange escrow", async () => {
+    // const escrowAccountPartial = anchor.web3.Keypair.generate();
+    // Init account escrow
+    await program.rpc.initialize(
+      vault_account_bump,
+      new anchor.BN(amount),
+      new anchor.BN(orderCode),
+      new anchor.BN(trialDay),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          seller: seller.publicKey,
+          judge: judge.publicKey,
+          mint: mintA.publicKey,
+          vaultAccount: vault_account_pda,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        instructions: [
+          await program.account.escrowAccount.createInstruction(escrowAccount),
+        ],
+        signers: [escrowAccount, buyer],
+      }
+    );
+
+    // Cancel Partial the escrow.
+    await program.rpc.cancelPartial(
+      new anchor.BN(orderCode),
+      new anchor.BN(amountPartial),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          vaultAccount: vault_account_pda,
+          vaultAuthority: vault_authority_pda,
+          escrowAccount: escrowAccount.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [buyer]
+      }
+    );
+    // Check the final owner should be the provider public key.
+    const _buyerTokenAccountAPartial = await mintA.getAccountInfo(buyerTokenAccountA);
+    // console.log(_buyerTokenAccountAPartial.amount.toNumber());
+    assert.ok(_buyerTokenAccountAPartial.owner.equals(buyer.publicKey));
+    // Check all the funds token A are still there.
+    assert.ok(_buyerTokenAccountAPartial.amount.toNumber() == (amount + amountPartial));
+    // Check Escrow Account.
+    let _escrowAccount = await program.account.escrowAccount.fetch(escrowAccount.publicKey);
+    // console.log(_escrowAccount.amount.toNumber());
+    // Check that the values in the escrow account match what we expect.
+    assert.ok(_escrowAccount.amount.toNumber() == (amount - amountPartial));
+
+    // call shipping.
+    await program.rpc.shipping(
+      new anchor.BN(orderCode),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          seller: seller.publicKey,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [seller]
+      }
+    );
+
+    // call delivered.
+    await program.rpc.delivered(
+      new anchor.BN(orderCode),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          seller: seller.publicKey,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [buyer]
+      }
+    );
+
+    // call exchange.
+    await program.rpc.exchange({
+      accounts: {
+        buyer: buyer.publicKey,
+        buyerDepositTokenAccount: buyerTokenAccountA,
+        seller: seller.publicKey,
+        sellerReceiveTokenAccount: sellerTokenAccountA,
+        escrowAccount: escrowAccount.publicKey,
+        vaultAccount: vault_account_pda,
+        vaultAuthority: vault_authority_pda,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      },
+      signers: [seller]
+    });
+
+    // Get data info from Blockchain.
+    let _buyerTokenAccountA = await mintA.getAccountInfo(buyerTokenAccountA);
+    let _sellerTokenAccountA = await mintA.getAccountInfo(sellerTokenAccountA);
+    // Check
+    // console.log(_buyerTokenAccountA.amount.toNumber());
+    assert.ok(_buyerTokenAccountA.amount.toNumber() == (amount + amountPartial));
+    // console.log(_sellerTokenAccountA.amount.toNumber());
+    assert.ok(_sellerTokenAccountA.amount.toNumber() == (amount*3 - amountPartial));
+  }); // buyer: 1500, seller: 2500
+
+  it("Initialize escrow, shipping, refund partial, delivered and exchange escrow", async () => {
+    // const escrowAccountPartial = anchor.web3.Keypair.generate();
+    // Init account escrow
+    await program.rpc.initialize(
+      vault_account_bump,
+      new anchor.BN(amount),
+      new anchor.BN(orderCode),
+      new anchor.BN(trialDay),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          seller: seller.publicKey,
+          judge: judge.publicKey,
+          mint: mintA.publicKey,
+          vaultAccount: vault_account_pda,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        instructions: [
+          await program.account.escrowAccount.createInstruction(escrowAccount),
+        ],
+        signers: [escrowAccount, buyer],
+      }
+    );
+
+    // call shipping.
+    await program.rpc.shipping(
+      new anchor.BN(orderCode),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          seller: seller.publicKey,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [seller]
+      }
+    );
+
+    // call refund partial
+    await program.rpc.refundPartial(
+      new anchor.BN(orderCode),
+      new anchor.BN(amountPartial),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          seller: seller.publicKey,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          vaultAccount: vault_account_pda,
+          vaultAuthority: vault_authority_pda,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [seller]
+      }
+    );
+    // Check the final owner should be the provider public key.
+    const _buyerTokenAccountAPartial = await mintA.getAccountInfo(buyerTokenAccountA);
+    // console.log(_buyerTokenAccountAPartial.amount.toNumber());
+    assert.ok(_buyerTokenAccountAPartial.owner.equals(buyer.publicKey));
+    // Check all the funds token A are still there.
+    assert.ok(_buyerTokenAccountAPartial.amount.toNumber() == (2*amountPartial));
+    // Check Escrow Account.
+    let _escrowAccount = await program.account.escrowAccount.fetch(escrowAccount.publicKey);
+    // console.log(_escrowAccount.amount.toNumber());
+    // Check that the values in the escrow account match what we expect.
+    assert.ok(_escrowAccount.amount.toNumber() == (amount - amountPartial));
+
+    // call delivered.
+    await program.rpc.delivered(
+      new anchor.BN(orderCode),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          seller: seller.publicKey,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [buyer]
+      }
+    );
+
+    // call exchange.
+    await program.rpc.exchange({
+      accounts: {
+        buyer: buyer.publicKey,
+        buyerDepositTokenAccount: buyerTokenAccountA,
+        seller: seller.publicKey,
+        sellerReceiveTokenAccount: sellerTokenAccountA,
+        escrowAccount: escrowAccount.publicKey,
+        vaultAccount: vault_account_pda,
+        vaultAuthority: vault_authority_pda,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      },
+      signers: [seller]
+    });
+
+    // Get data info from Blockchain.
+    let _buyerTokenAccountA = await mintA.getAccountInfo(buyerTokenAccountA);
+    let _sellerTokenAccountA = await mintA.getAccountInfo(sellerTokenAccountA);
+    // Check
+    // console.log(_buyerTokenAccountA.amount.toNumber());
+    assert.ok(_buyerTokenAccountA.amount.toNumber() == (2*amountPartial));
+    // console.log(_sellerTokenAccountA.amount.toNumber());
+    assert.ok(_sellerTokenAccountA.amount.toNumber() == (amount*4 - 2*amountPartial));
+  }); // buyer: 1000, seller: 3000
+
+  it("Initialize escrow, shipping, adjudge partial, refund and cancel escrow", async () => {
+    // const escrowAccountPartial = anchor.web3.Keypair.generate();
+    // Init account escrow
+    await program.rpc.initialize(
+      vault_account_bump,
+      new anchor.BN(amountPartial*2),
+      new anchor.BN(orderCode),
+      new anchor.BN(trialDay),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          seller: seller.publicKey,
+          judge: judge.publicKey,
+          mint: mintA.publicKey,
+          vaultAccount: vault_account_pda,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        instructions: [
+          await program.account.escrowAccount.createInstruction(escrowAccount),
+        ],
+        signers: [escrowAccount, buyer],
+      }
+    );
+
+    // call shipping.
+    await program.rpc.shipping(
+      new anchor.BN(orderCode),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          seller: seller.publicKey,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [seller]
+      }
+    );
+
+    // call adjudge partial
+    await program.rpc.adjudgePartial(
+      new anchor.BN(orderCode),
+      new anchor.BN(amountPartial),
+      {
+        accounts: {
+          judge: judge.publicKey,
+          buyer: buyer.publicKey,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          seller: seller.publicKey,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          vaultAccount: vault_account_pda,
+          vaultAuthority: vault_authority_pda,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [judge]
+      }
+    );
+    // Check the final owner should be the provider public key.
+    const _buyerTokenAccountAPartial = await mintA.getAccountInfo(buyerTokenAccountA);
+    // console.log(_buyerTokenAccountAPartial.amount.toNumber());
+    assert.ok(_buyerTokenAccountAPartial.owner.equals(buyer.publicKey));
+    // Check all the funds token A are still there.
+    assert.ok(_buyerTokenAccountAPartial.amount.toNumber() == amountPartial);
+    // Check Escrow Account.
+    let _escrowAccount = await program.account.escrowAccount.fetch(escrowAccount.publicKey);
+    // console.log(_escrowAccount.amount.toNumber());
+    // Check that the values in the escrow account match what we expect.
+    assert.ok(_escrowAccount.amount.toNumber() == amountPartial);
+
+    // call refund
+    await program.rpc.refund(
+      new anchor.BN(orderCode),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          seller: seller.publicKey,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [seller]
+      }
+    );
+
+    // Cancel the escrow.
+    await program.rpc.cancel(
+      new anchor.BN(orderCode),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          vaultAccount: vault_account_pda,
+          vaultAuthority: vault_authority_pda,
+          escrowAccount: escrowAccount.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [buyer]
+      }
+    );
+    // Check the final owner should be the provider public key.
+    const _buyerTokenAccountA = await mintA.getAccountInfo(buyerTokenAccountA);
+    // console.log(_buyerTokenAccountA.amount.toNumber());
+    assert.ok(_buyerTokenAccountA.owner.equals(buyer.publicKey));
+    // Check all the funds token A are still there.
+    assert.ok(_buyerTokenAccountA.amount.toNumber() == (amountPartial*2));
+  }); // buyer: 1000, seller: 3000
+
+  it("Initialize escrow, shipping, adjudge partial, delivered and exchange escrow", async () => {
+    // const escrowAccountPartial = anchor.web3.Keypair.generate();
+    // Init account escrow
+    await program.rpc.initialize(
+      vault_account_bump,
+      new anchor.BN(amountPartial*2),
+      new anchor.BN(orderCode),
+      new anchor.BN(trialDay),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          seller: seller.publicKey,
+          judge: judge.publicKey,
+          mint: mintA.publicKey,
+          vaultAccount: vault_account_pda,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        instructions: [
+          await program.account.escrowAccount.createInstruction(escrowAccount),
+        ],
+        signers: [escrowAccount, buyer],
+      }
+    );
+
+    // call shipping.
+    await program.rpc.shipping(
+      new anchor.BN(orderCode),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          seller: seller.publicKey,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [seller]
+      }
+    );
+
+    // call adjudge partial
+    await program.rpc.adjudgePartial(
+      new anchor.BN(orderCode),
+      new anchor.BN(amountPartial),
+      {
+        accounts: {
+          judge: judge.publicKey,
+          buyer: buyer.publicKey,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          seller: seller.publicKey,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          vaultAccount: vault_account_pda,
+          vaultAuthority: vault_authority_pda,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [judge]
+      }
+    );
+    // Check the final owner should be the provider public key.
+    const _buyerTokenAccountAPartial = await mintA.getAccountInfo(buyerTokenAccountA);
+    // console.log(_buyerTokenAccountAPartial.amount.toNumber());
+    assert.ok(_buyerTokenAccountAPartial.owner.equals(buyer.publicKey));
+    // Check all the funds token A are still there.
+    assert.ok(_buyerTokenAccountAPartial.amount.toNumber() == amountPartial);
+    // Check Escrow Account.
+    let _escrowAccount = await program.account.escrowAccount.fetch(escrowAccount.publicKey);
+    // console.log(_escrowAccount.amount.toNumber());
+    // Check that the values in the escrow account match what we expect.
+    assert.ok(_escrowAccount.amount.toNumber() == amountPartial);
+
+    // call delivered.
+    await program.rpc.delivered(
+      new anchor.BN(orderCode),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          seller: seller.publicKey,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [buyer]
+      }
+    );
+
+    // call exchange.
+    await program.rpc.exchange({
+      accounts: {
+        buyer: buyer.publicKey,
+        buyerDepositTokenAccount: buyerTokenAccountA,
+        seller: seller.publicKey,
+        sellerReceiveTokenAccount: sellerTokenAccountA,
+        escrowAccount: escrowAccount.publicKey,
+        vaultAccount: vault_account_pda,
+        vaultAuthority: vault_authority_pda,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      },
+      signers: [seller]
+    });
+
+    // Get data info from Blockchain.
+    let _buyerTokenAccountA = await mintA.getAccountInfo(buyerTokenAccountA);
+    let _sellerTokenAccountA = await mintA.getAccountInfo(sellerTokenAccountA);
+    // Check
+    // console.log(_buyerTokenAccountA.amount.toNumber());
+    assert.ok(_buyerTokenAccountA.amount.toNumber() == amountPartial);
+    // console.log(_sellerTokenAccountA.amount.toNumber());
+    assert.ok(_sellerTokenAccountA.amount.toNumber() == (amount*4 - amountPartial));
+  }); // buyer: 500, seller: 3500
+
+  it("Initialize escrow, shipping and adjudge escrow for Buyer", async () => {
+    // Init account escrow
+    await program.rpc.initialize(
+      vault_account_bump,
+      new anchor.BN(amountPartial),
+      new anchor.BN(orderCode),
+      new anchor.BN(trialDay),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          seller: seller.publicKey,
+          judge: judge.publicKey,
+          mint: mintA.publicKey,
+          vaultAccount: vault_account_pda,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        instructions: [
+          await program.account.escrowAccount.createInstruction(escrowAccount),
+        ],
+        signers: [escrowAccount, buyer],
+      }
+    );
+
+    // call shipping.
+    await program.rpc.shipping(
+      new anchor.BN(orderCode),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          seller: seller.publicKey,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [seller]
+      }
+    );
+
+    // call adjudge for buyer
+    await program.rpc.adjudgeForBuyer(
+      new anchor.BN(orderCode),
+      {
+        accounts: {
+          judge: judge.publicKey,
+          buyer: buyer.publicKey,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          seller: seller.publicKey,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          vaultAccount: vault_account_pda,
+          vaultAuthority: vault_authority_pda,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [judge]
+      }
+    );
+
+    // Get data info from Blockchain.
+    let _buyerTokenAccountA = await mintA.getAccountInfo(buyerTokenAccountA);
+    let _sellerTokenAccountA = await mintA.getAccountInfo(sellerTokenAccountA);
+    // Check
+    // console.log(_buyerTokenAccountA.amount.toNumber());
+    assert.ok(_buyerTokenAccountA.amount.toNumber() == amountPartial);
+    // console.log(_sellerTokenAccountA.amount.toNumber());
+    assert.ok(_sellerTokenAccountA.amount.toNumber() == (amount*4 - amountPartial));
+  }); // buyer: 500, seller: 3500
+
+  it("Initialize escrow, shipping and adjudge escrow for Seller", async () => {
+    // Init account escrow
+    await program.rpc.initialize(
+      vault_account_bump,
+      new anchor.BN(amountPartial),
+      new anchor.BN(orderCode),
+      new anchor.BN(trialDay),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          seller: seller.publicKey,
+          judge: judge.publicKey,
+          mint: mintA.publicKey,
+          vaultAccount: vault_account_pda,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        instructions: [
+          await program.account.escrowAccount.createInstruction(escrowAccount),
+        ],
+        signers: [escrowAccount, buyer],
+      }
+    );
+
+    // call shipping.
+    await program.rpc.shipping(
+      new anchor.BN(orderCode),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          seller: seller.publicKey,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [seller]
+      }
+    );
+
+    // call adjudge for seller
+    await program.rpc.adjudgeForSeller(
+      new anchor.BN(orderCode),
+      {
+        accounts: {
+          judge: judge.publicKey,
+          buyer: buyer.publicKey,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          seller: seller.publicKey,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          vaultAccount: vault_account_pda,
+          vaultAuthority: vault_authority_pda,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [judge]
+      }
+    );
+
+    // Get data info from Blockchain.
+    let _buyerTokenAccountA = await mintA.getAccountInfo(buyerTokenAccountA);
+    let _sellerTokenAccountA = await mintA.getAccountInfo(sellerTokenAccountA);
+    // Check
+    // console.log(_buyerTokenAccountA.amount.toNumber());
+    assert.ok(_buyerTokenAccountA.amount.toNumber() == 0);
+    // console.log(_sellerTokenAccountA.amount.toNumber());
+    assert.ok(_sellerTokenAccountA.amount.toNumber() == (amount*4));
+  }); // buyer: 0, seller: 4000
+
+
+  // 1000 --> buyer
+  it("Initialize escrow, charge more and cancel escrow", async () => {
+    // Put back tokens into buyer token A account.
+    await mintA.mintTo(
+      buyerTokenAccountA,
+      mintAuthority.publicKey,
+      [mintAuthority],
+      amount
+    );
+
+    // Init account escrow
+    await program.rpc.initialize(
+      vault_account_bump,
+      new anchor.BN(amountPartial),
+      new anchor.BN(orderCode),
+      new anchor.BN(trialDay),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          seller: seller.publicKey,
+          judge: judge.publicKey,
+          mint: mintA.publicKey,
+          vaultAccount: vault_account_pda,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        instructions: [
+          await program.account.escrowAccount.createInstruction(escrowAccount),
+        ],
+        signers: [escrowAccount, buyer],
+      }
+    );
+
+    // Charge More buyer.
+    await program.rpc.chargeMore(
+      new anchor.BN(orderCode),
+      new anchor.BN(amountPartial),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          seller: seller.publicKey,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          vaultAccount: vault_account_pda,
+          vaultAuthority: vault_authority_pda,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [buyer]
+      }
+    );
+    // Check the final owner should be the provider public key.
+    const _buyerTokenAccountAPartial = await mintA.getAccountInfo(buyerTokenAccountA);
+    // console.log(_buyerTokenAccountAPartial.amount.toNumber());
+    assert.ok(_buyerTokenAccountAPartial.owner.equals(buyer.publicKey));
+    // Check all the funds token A are still there.
+    assert.ok(_buyerTokenAccountAPartial.amount.toNumber() == (amount - 2*amountPartial));
+    // Check Escrow Account.
+    let _escrowAccount = await program.account.escrowAccount.fetch(escrowAccount.publicKey);
+    // console.log(_escrowAccount.amount.toNumber());
+    // Check that the values in the escrow account match what we expect.
+    assert.ok(_escrowAccount.amount.toNumber() == (2*amountPartial));
+
+
+    // Cancel the escrow.
+    await program.rpc.cancel(
+      new anchor.BN(orderCode),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          vaultAccount: vault_account_pda,
+          vaultAuthority: vault_authority_pda,
+          escrowAccount: escrowAccount.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [buyer]
+      }
+    );
+    // Check the final owner should be the provider public key.
+    const _buyerTokenAccountA = await mintA.getAccountInfo(buyerTokenAccountA);
+    // console.log(_buyerTokenAccountA.amount.toNumber());
+    assert.ok(_buyerTokenAccountA.owner.equals(buyer.publicKey));
+    // Check all the funds token A are still there.
+    assert.ok(_buyerTokenAccountA.amount.toNumber() == amount);
+  }); // buyer: 1000, seller: 4000
+
+  it("Initialize escrow, shipping, charge more, delivered and exchange escrow", async () => {
+    // Init account escrow
+    await program.rpc.initialize(
+      vault_account_bump,
+      new anchor.BN(amountPartial),
+      new anchor.BN(orderCode),
+      new anchor.BN(trialDay),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          seller: seller.publicKey,
+          judge: judge.publicKey,
+          mint: mintA.publicKey,
+          vaultAccount: vault_account_pda,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        instructions: [
+          await program.account.escrowAccount.createInstruction(escrowAccount),
+        ],
+        signers: [escrowAccount, buyer],
+      }
+    );
+
+    // call shipping.
+    await program.rpc.shipping(
+      new anchor.BN(orderCode),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          seller: seller.publicKey,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [seller]
+      }
+    );
+
+    // Charge More buyer.
+    await program.rpc.chargeMore(
+      new anchor.BN(orderCode),
+      new anchor.BN(amountPartial),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          seller: seller.publicKey,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          vaultAccount: vault_account_pda,
+          vaultAuthority: vault_authority_pda,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [buyer]
+      }
+    );
+    // Check the final owner should be the provider public key.
+    const _buyerTokenAccountAPartial = await mintA.getAccountInfo(buyerTokenAccountA);
+    // console.log(_buyerTokenAccountAPartial.amount.toNumber());
+    assert.ok(_buyerTokenAccountAPartial.owner.equals(buyer.publicKey));
+    // Check all the funds token A are still there.
+    assert.ok(_buyerTokenAccountAPartial.amount.toNumber() == (amount - 2*amountPartial));
+    // Check Escrow Account.
+    let _escrowAccount = await program.account.escrowAccount.fetch(escrowAccount.publicKey);
+    // console.log(_escrowAccount.amount.toNumber());
+    // Check that the values in the escrow account match what we expect.
+    assert.ok(_escrowAccount.amount.toNumber() == (2*amountPartial));
+
+    // call delivered.
+    await program.rpc.delivered(
+      new anchor.BN(orderCode),
+      {
+        accounts: {
+          buyer: buyer.publicKey,
+          buyerDepositTokenAccount: buyerTokenAccountA,
+          seller: seller.publicKey,
+          sellerReceiveTokenAccount: sellerTokenAccountA,
+          escrowAccount: escrowAccount.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+        signers: [buyer]
+      }
+    );
+
+    // call exchange.
+    await program.rpc.exchange({
+      accounts: {
+        buyer: buyer.publicKey,
+        buyerDepositTokenAccount: buyerTokenAccountA,
+        seller: seller.publicKey,
+        sellerReceiveTokenAccount: sellerTokenAccountA,
+        escrowAccount: escrowAccount.publicKey,
+        vaultAccount: vault_account_pda,
+        vaultAuthority: vault_authority_pda,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      },
+      signers: [seller]
+    });
+
+    // Get data info from Blockchain.
+    let _buyerTokenAccountA = await mintA.getAccountInfo(buyerTokenAccountA);
+    let _sellerTokenAccountA = await mintA.getAccountInfo(sellerTokenAccountA);
+    // Check
+    // console.log(_buyerTokenAccountA.amount.toNumber());
+    assert.ok(_buyerTokenAccountA.amount.toNumber() == (amount - 2*amountPartial));
+    // console.log(_sellerTokenAccountA.amount.toNumber());
+    assert.ok(_sellerTokenAccountA.amount.toNumber() == (amount*4 + 2*amountPartial));
+  }); // buyer: 0, seller: 5000
 
 });

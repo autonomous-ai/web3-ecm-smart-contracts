@@ -26,7 +26,7 @@ npm install -g yarn
 View docs solana [here](https://docs.solana.com/cli/install-solana-cli-tools).  
 ```bash
 ### Install
-sh -c "$(curl -sSfL https://release.solana.com/v1.9.1/install)"
+sh -c "$(curl -sSfL https://release.solana.com/v1.8.16/install)"
 
 ### Check
 solana --version

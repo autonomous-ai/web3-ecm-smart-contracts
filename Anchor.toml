@@ -1,6 +1,6 @@
 
 [programs.localnet]
-lambda_escrow = "H6F8pqX9oVwWz8bsPdastMv2eMEr6VBzhaBBanajBp5s"
+lambda_escrow = "CXWCr2nFZ5yXuewf5t2GFYTT337XmaH8UrhUbS2Hy8tL"
 
 [registry]
 url = "https://anchor.projectserum.com"
