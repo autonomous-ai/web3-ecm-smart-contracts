@@ -1,5 +1,5 @@
 # web3-ecm-smart-contracts
-web3-ecm-smart-contracts is an escrow smart contract on Solana blockchain.  
+web3-ecm-smart-contracts is an Escrow smart contract on Solana blockchain platform.  
 
 ## Setup environment
 ### Install Rust
@@ -50,10 +50,11 @@ or
 yarn
 
 ### Build and Test smart contract
-# Anchor build
+# Verify path to key pair and update if needed in Anchor.toml at [provider].wallet section
+# Build smart contract
 anchor build
 
-# Anchor test
+# Run unit test
 anchor test
 
 # Get program id
